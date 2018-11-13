@@ -16,7 +16,7 @@ class MenuItemAdmin extends AbstractAdmin
 {
     protected $baseRoutePattern = 'sonata/menu/menu-item';
     protected $parentAssociationMapping = 'menu';
-    
+
     /**
      * {@inheritdoc}
      */
@@ -30,17 +30,17 @@ class MenuItemAdmin extends AbstractAdmin
         if(!$menu) {
 
             $request = $this->getRequest();
-            
+
             $id = $request->get('menu', '');
 
 
             if(!empty(intval($id))) {
-            
+
                 $menuManager = $this->getConfigurationPool()->getContainer()->get('prodigious_sonata_menu.manager');
 
                 $menu = $menuManager->load($id);
             }
-        }        
+        }
 
         $formMapper
             ->with('config.label_menu_item', array('class' => 'col-md-6', 'translation_domain' => 'ProdigiousSonataMenuBundle'))
@@ -101,31 +101,57 @@ class MenuItemAdmin extends AbstractAdmin
 
         if($this->getConfigurationPool()->getContainer()->hasParameter('sonata.page.page.class')){
             $pageClass = $this->getConfigurationPool()->getContainer()->getParameter('sonata.page.page.class');
-            
+
+            $currentSite = $this->getConfigurationPool()->getContainer()->get('sonata.page.site.selector')->retrieve();
+
             $em = $this->modelManager->getEntityManager($pageClass);
             $builder = $em->createQueryBuilder('p');
 
-            $query = $builder->select('p.name, p.url')
+            $query = $builder->select('p.name, p.url, p.routeName')
                        ->from($pageClass, 'p')
+                       ->where('p.site = :currentsite')
+                       ->setParameter(':currentsite', $currentSite->getId())
                        ->getQuery();
 
             $pages = $query->getResult();
 
-            $choices = array();
+
+            $cmsPages = array();
+            $internalPages = array();
 
             $subject = $this->getSubject();
             $url = $subject->getUrl();
-           
+
             if(version_compare(\Symfony\Component\HttpKernel\Kernel::VERSION, "3.0", "<=")){
-                $choices[0] = 'config.label_select';
+                $choices[] = 'config.label_select';
+
                 foreach ($pages as $page) {
-                    $choices[$page['url']] = ucfirst($page['name']);
+                    if ($page['url']) {
+                        if ($page['routeName'] == 'page_slug') {
+                            $cmsPages[$page['url']] = ucfirst($page['name']);
+                        } else {
+                            $internalPages[$page['url']] = ucfirst($page['name']);
+                        }
+                    }
                 }
+                $choices = array(
+                    0 => 'config.label_select',
+                    'config.label_cmsPages' => $cmsPages,
+                    'config.label_internalPages' => $internalPages
+                );
             }else {
                 foreach ($pages as $page) {
-                    $choices['config.label_select'] = null;
-                    $choices[ucfirst($page['name'])] = $page['url'];
+                    if ($page['routeName'] == 'page_slug') {
+                        $cmsPages[ucfirst($page['name'])] = $page['url'];
+                    } else {
+                        $internalPages[ucfirst($page['name'])] = $page['url'];
+                    }
                 }
+                $choices = array(
+                    'config.label_select' => null,
+                    'config.label_cmsPages' => $cmsPages,
+                    'config.label_internalPages' => $internalPages
+                );
             }
             $formMapper
                 ->with('config.label_menu_link', array('class' => 'col-md-6', 'translation_domain' => 'ProdigiousSonataMenuBundle'))
@@ -143,11 +169,11 @@ class MenuItemAdmin extends AbstractAdmin
                     )
                 ->end();
         }
-        
+
 
         $formMapper
             ->with('config.label_menu_link', array('class' => 'col-md-6', 'translation_domain' => 'ProdigiousSonataMenuBundle'))
-                ->add('url', 'text', 
+                ->add('url', 'text',
                     array(
                         'label' => 'config.label_custom_url',
                         'required' => false,
@@ -172,7 +198,7 @@ class MenuItemAdmin extends AbstractAdmin
      * {@inheritdoc}
      */
     protected function configureListFields(ListMapper $listMapper)
-    {   
+    {
         $listMapper->addIdentifier('name', null, array('label' => 'config.label_name', 'translation_domain' => 'ProdigiousSonataMenuBundle'));
 
         if(version_compare(\Symfony\Component\HttpKernel\Kernel::VERSION, "3.0", "<")){
@@ -225,7 +251,7 @@ class MenuItemAdmin extends AbstractAdmin
 
     public function rewriteUrl($object)
     {
-        if($this->getConfigurationPool()->getContainer()->hasParameter('sonata.page.page.class')) {      
+        if($this->getConfigurationPool()->getContainer()->hasParameter('sonata.page.page.class')) {
             $data = $this->getForm()->get('page')->getData();
             if(!empty($data)){
                 $object->setUrl($data);

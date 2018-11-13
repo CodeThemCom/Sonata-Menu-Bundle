@@ -15,3 +15,5 @@ config.label_children: Submenu
 config.label_menu_link: Link
 config.label_add_menu_item: Add item
 config.label_select: Select
+config.label_cmsPages: CMS Pages
+config.label_internalPages: Internal Pages
